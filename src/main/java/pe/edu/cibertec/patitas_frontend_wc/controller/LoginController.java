@@ -7,12 +7,16 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
-import pe.edu.cibertec.patitas_frontend_wc.dto.LoginRequestDTO;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import pe.edu.cibertec.patitas_frontend_wc.dto.LogoutResponseDTO;
+import pe.edu.cibertec.patitas_frontend_wc.dto.LogoutRequestDTO;
 import pe.edu.cibertec.patitas_frontend_wc.dto.LoginResponseDTO;
+import pe.edu.cibertec.patitas_frontend_wc.dto.LoginRequestDTO;
 import pe.edu.cibertec.patitas_frontend_wc.viewmodel.LoginModel;
 import reactor.core.publisher.Mono;
+
+
 
 @Controller
 @RequestMapping("/login")
@@ -26,6 +30,13 @@ public class LoginController {
         LoginModel loginModel = new LoginModel("00", "", "");
         model.addAttribute("loginModel", loginModel);
         return "inicio";
+    }
+
+    @GetMapping("/errorPage")
+    public String errorPage(Model model) {
+        LoginModel loginModel = new LoginModel("00", "", "");
+        model.addAttribute("loginModel", loginModel);
+        return "errorPage";
     }
 
     @PostMapping("/autenticar")
@@ -55,7 +66,7 @@ public class LoginController {
                     .retrieve()
                     .bodyToMono(LoginResponseDTO.class);
 
-            // recuperar resultado del mono (Sincrono o bloqueante)
+           
             LoginResponseDTO loginResponseDTO = monoLoginResponseDTO.block();
 
             // Validar respuesta
@@ -63,6 +74,8 @@ public class LoginController {
 
                 LoginModel loginModel = new LoginModel("00", "", loginResponseDTO.nombreUsuario());
                 model.addAttribute("loginModel", loginModel);
+                LoginRequestDTO requestDTO = new LoginRequestDTO(tipoDocumento, numeroDocumento, password);
+                model.addAttribute("loginRequestDTO", requestDTO);
                 return "principal";
 
             } else {
@@ -83,5 +96,34 @@ public class LoginController {
         }
 
     }
+
+    @PostMapping("/cerrar-sesion")
+    public String cerrarSesion(@RequestParam("tipoDocumento") String tipoDocumento,
+                               @RequestParam("numeroDocumento") String numeroDocumento,
+                               Model model, RedirectAttributes redirectAttributes) {
+
+        LogoutRequestDTO logoutRequestDTO = new LogoutRequestDTO(tipoDocumento, numeroDocumento);
+
+        try {
+            Mono<LogoutResponseDTO> monoLogoutResponseDTO = webClientAutenticacion.post()
+                    .uri("/logout")
+                    .body(Mono.just(logoutRequestDTO), LogoutRequestDTO.class)
+                    // Obtener la respuesta
+                    .retrieve()
+                    .bodyToMono(LogoutResponseDTO.class); 
+
+
+            LogoutResponseDTO logoutResponseDTO = monoLogoutResponseDTO.block();
+            redirectAttributes.addFlashAttribute("mensaje", "Sesión cerrada correctamente.");
+            return "redirect:/login/inicio";
+
+        } catch (Exception e) {
+            // Manejo de excepciones al realizar la solicitud
+            model.addAttribute("error", "Error: Ocurrió un problema al intentar cerrar sesión.");
+            System.out.println(e.getMessage());
+            return "errorPage";
+        }
+    }
+
 
 }
